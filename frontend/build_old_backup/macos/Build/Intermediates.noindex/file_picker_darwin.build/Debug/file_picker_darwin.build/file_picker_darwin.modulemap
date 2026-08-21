@@ -1,0 +1,4 @@
+module file_picker_darwin {
+header "file_picker_darwin-Swift.h"
+export *
+}

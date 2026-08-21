@@ -1,0 +1,26 @@
+Target dependency graph (11 targets)
+Target 'Runner' in project 'Runner'
+➜ Explicit dependency on target 'Flutter Assemble' in project 'Runner'
+➜ Explicit dependency on target 'FlutterGeneratedPluginSwiftPackage' in project 'FlutterGeneratedPluginSwiftPackage'
+Target 'FlutterGeneratedPluginSwiftPackage' in project 'FlutterGeneratedPluginSwiftPackage'
+➜ Explicit dependency on target 'FlutterGeneratedPluginSwiftPackage' in project 'FlutterGeneratedPluginSwiftPackage'
+➜ Explicit dependency on target 'file-picker-darwin' in project 'file_picker_darwin'
+➜ Explicit dependency on target 'shared-preferences-foundation' in project 'shared_preferences_foundation'
+➜ Explicit dependency on target 'FlutterFramework' in project 'FlutterFramework'
+Target 'FlutterGeneratedPluginSwiftPackage' in project 'FlutterGeneratedPluginSwiftPackage'
+➜ Explicit dependency on target 'file-picker-darwin' in project 'file_picker_darwin'
+➜ Explicit dependency on target 'shared-preferences-foundation' in project 'shared_preferences_foundation'
+➜ Explicit dependency on target 'FlutterFramework' in project 'FlutterFramework'
+Target 'FlutterFramework' in project 'FlutterFramework'
+➜ Explicit dependency on target 'FlutterFramework' in project 'FlutterFramework'
+Target 'FlutterFramework' in project 'FlutterFramework' (no dependencies)
+Target 'shared-preferences-foundation' in project 'shared_preferences_foundation'
+➜ Explicit dependency on target 'shared_preferences_foundation' in project 'shared_preferences_foundation'
+➜ Explicit dependency on target 'shared_preferences_foundation_shared_preferences_foundation' in project 'shared_preferences_foundation'
+Target 'shared_preferences_foundation' in project 'shared_preferences_foundation'
+➜ Explicit dependency on target 'shared_preferences_foundation_shared_preferences_foundation' in project 'shared_preferences_foundation'
+Target 'shared_preferences_foundation_shared_preferences_foundation' in project 'shared_preferences_foundation' (no dependencies)
+Target 'file-picker-darwin' in project 'file_picker_darwin'
+➜ Explicit dependency on target 'file_picker_darwin' in project 'file_picker_darwin'
+Target 'file_picker_darwin' in project 'file_picker_darwin' (no dependencies)
+Target 'Flutter Assemble' in project 'Runner' (no dependencies)
