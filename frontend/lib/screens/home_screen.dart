@@ -12,7 +12,6 @@ import '../widgets/gradient_action_button.dart';
 import '../widgets/history_button.dart';
 import '../widgets/link_input_field.dart';
 import '../widgets/neomorphic_container.dart';
-import '../widgets/overlay_permission_banner.dart';
 import '../widgets/platform_logo_row.dart';
 import '../widgets/theme_toggle_button.dart';
 
@@ -101,6 +100,7 @@ class HomeScreenState extends State<HomeScreen> {
       formatId: formatId,
       audioOnly: audioOnly,
       audioFormat: audioFormat,
+      title: _info?.title,
     );
   }
 
@@ -141,7 +141,6 @@ class HomeScreenState extends State<HomeScreen> {
                       ),
                       const SizedBox(height: 24),
                       const BackendSetupBanner(),
-                      const OverlayPermissionBanner(),
                       const PlatformLogoRow(),
                       const SizedBox(height: 30),
                       LinkInputField(

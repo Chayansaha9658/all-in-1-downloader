@@ -17,6 +17,11 @@ class TermuxBridgeService {
       'source .venv/bin/activate && '
       'uvicorn app.main:app --host 0.0.0.0 --port 8000';
 
+  /// Pre-fills the repo field in the Setup Wizard so there's nothing to
+  /// hunt down -- update this if the repo ever moves.
+  static const String defaultRepoUrl =
+      'https://github.com/Chayansaha9658/all-in-1-downloader.git';
+
   /// One-time command the person pastes inside Termux itself. This can
   /// never be sent programmatically -- it lives in Termux's own private
   /// settings file, which no other app is allowed to touch. That boundary

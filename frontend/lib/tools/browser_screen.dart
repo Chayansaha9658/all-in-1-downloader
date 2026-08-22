@@ -599,6 +599,7 @@ class _BrowserDownloadSheetState extends State<_BrowserDownloadSheet> {
         formatId: formatId,
         audioOnly: audioOnly,
         audioFormat: 'mp3',
+        title: _info?.title,
       );
       BackgroundDownloadManager.instance.track(
         jobId: jobId,

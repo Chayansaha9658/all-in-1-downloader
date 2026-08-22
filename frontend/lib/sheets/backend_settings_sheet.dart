@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 
 import '../services/backend_config_service.dart';
-import '../services/termux_bridge_service.dart';
 import '../services/theme_controller.dart';
 import '../screens/termux_setup_screen.dart';
 import '../widgets/neomorphic_container.dart';
@@ -24,8 +23,6 @@ enum _TestState { idle, checking, success, failure }
 
 enum _ScanState { idle, scanning, notFound }
 
-enum _TermuxState { idle, sending, sent, notInstalled, error }
-
 class _BackendSettingsSheet extends StatefulWidget {
   const _BackendSettingsSheet();
 
@@ -35,10 +32,8 @@ class _BackendSettingsSheet extends StatefulWidget {
 
 class _BackendSettingsSheetState extends State<_BackendSettingsSheet> {
   late final TextEditingController _controller;
-  late final TextEditingController _termuxController;
   _TestState _state = _TestState.idle;
   _ScanState _scanState = _ScanState.idle;
-  _TermuxState _termuxState = _TermuxState.idle;
   int _scanChecked = 0;
   int _scanTotal = 0;
 
@@ -51,15 +46,11 @@ class _BackendSettingsSheetState extends State<_BackendSettingsSheet> {
     _controller = TextEditingController(
       text: BackendConfigService.instance.baseUrl,
     );
-    _termuxController = TextEditingController(
-      text: BackendConfigService.instance.termuxCommand,
-    );
   }
 
   @override
   void dispose() {
     _controller.dispose();
-    _termuxController.dispose();
     super.dispose();
   }
 
@@ -125,23 +116,6 @@ class _BackendSettingsSheetState extends State<_BackendSettingsSheet> {
     await _test();
   }
 
-  Future<void> _runViaTermux() async {
-    setState(() => _termuxState = _TermuxState.sending);
-    final installed = await TermuxBridgeService.instance.isTermuxInstalled();
-    if (!installed) {
-      if (!mounted) return;
-      setState(() => _termuxState = _TermuxState.notInstalled);
-      return;
-    }
-    final command = _termuxController.text.trim();
-    await BackendConfigService.instance.setTermuxCommand(command);
-    final sent = await TermuxBridgeService.instance.runCommand(command);
-    if (!mounted) return;
-    setState(() {
-      _termuxState = sent ? _TermuxState.sent : _TermuxState.error;
-    });
-  }
-
   @override
   Widget build(BuildContext context) {
     final colors = ThemeController.instance.colors;
@@ -151,262 +125,45 @@ class _BackendSettingsSheetState extends State<_BackendSettingsSheet> {
       ),
       child: Container(
         margin: const EdgeInsets.fromLTRB(14, 0, 14, 20),
-        child: NeomorphicContainer(
-          borderRadius: BorderRadius.circular(28),
-          intensity: 8,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Center(
-                child: Container(
-                  width: 40,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 16),
-                  decoration: BoxDecoration(
-                    color: colors.shadowDark,
-                    borderRadius: BorderRadius.circular(4),
-                  ),
-                ),
-              ),
-              Text(
-                'Backend server',
-                style: TextStyle(
-                  color: colors.textPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Don\'t know the IP? Tap Auto-detect below -- it scans your '
-                'WiFi network and fills it in for you.',
-                style: TextStyle(color: colors.textFaint, fontSize: 12.5),
-              ),
-              const SizedBox(height: 16),
-              TapScale(
-                onTap: _busy ? null : _autoDetect,
-                child: Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(vertical: 14),
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(16),
-                    border: Border.all(color: colors.accent, width: 1.4),
-                  ),
-                  child: _scanState == _ScanState.scanning
-                      ? Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: OrbitLoader(size: 16),
-                            ),
-                            const SizedBox(width: 10),
-                            Text(
-                              _scanTotal > 0
-                                  ? 'Scanning network... $_scanChecked/$_scanTotal'
-                                  : 'Scanning network...',
-                              style: TextStyle(
-                                color: colors.accent,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 13,
-                              ),
-                            ),
-                          ],
-                        )
-                      : Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(
-                              Icons.wifi_find_rounded,
-                              color: colors.accent,
-                              size: 18,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'Auto-detect',
-                              style: TextStyle(
-                                color: colors.accent,
-                                fontWeight: FontWeight.w700,
-                                fontSize: 14,
-                              ),
-                            ),
-                          ],
-                        ),
-                ),
-              ),
-              if (_scanState == _ScanState.notFound) ...[
-                const SizedBox(height: 8),
-                Text(
-                  'No backend found on this WiFi network. Make sure it\'s '
-                  'running and your phone is on the same network, then try '
-                  'again -- or enter the IP manually below.',
-                  style: TextStyle(
-                    color: const Color(0xFFE85D75),
-                    fontSize: 11.5,
-                  ),
-                ),
-              ],
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 1,
-                      color: colors.shadowDark.withValues(alpha: 0.3),
-                    ),
-                  ),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 10),
-                    child: Text(
-                      'or enter manually',
-                      style: TextStyle(color: colors.textFaint, fontSize: 11),
-                    ),
-                  ),
-                  Expanded(
-                    child: Container(
-                      height: 1,
-                      color: colors.shadowDark.withValues(alpha: 0.3),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 14),
-              NeomorphicContainer(
-                style: NeoStyle.pressed,
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 14,
-                  vertical: 4,
-                ),
-                borderRadius: BorderRadius.circular(14),
-                child: TextField(
-                  controller: _controller,
-                  style: TextStyle(color: colors.textPrimary, fontSize: 14),
-                  keyboardType: TextInputType.url,
-                  textInputAction: TextInputAction.done,
-                  decoration: InputDecoration(
-                    isDense: true,
-                    border: InputBorder.none,
-                    hintText: '192.168.0.42:8000',
-                    hintStyle: TextStyle(color: colors.textFaint, fontSize: 13),
-                  ),
-                  onSubmitted: (_) => _save(),
-                ),
-              ),
-              const SizedBox(height: 10),
-              _StatusLine(state: _state, colors: colors),
-              if (Platform.isAndroid) ...[
-                const SizedBox(height: 20),
-                Row(
-                  children: [
-                    Expanded(
-                      child: Container(
-                        height: 1,
-                        color: colors.shadowDark.withValues(alpha: 0.3),
-                      ),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 10),
-                      child: Text(
-                        'run backend on this phone',
-                        style: TextStyle(color: colors.textFaint, fontSize: 11),
-                      ),
-                    ),
-                    Expanded(
-                      child: Container(
-                        height: 1,
-                        color: colors.shadowDark.withValues(alpha: 0.3),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                TapScale(
-                  onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => const TermuxSetupScreen(),
-                      ),
-                    );
-                  },
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.85,
+        ),
+        child: SingleChildScrollView(
+          child: NeomorphicContainer(
+            borderRadius: BorderRadius.circular(28),
+            intensity: 8,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Center(
                   child: Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.symmetric(vertical: 13),
-                    alignment: Alignment.center,
+                    width: 40,
+                    height: 4,
+                    margin: const EdgeInsets.only(bottom: 16),
                     decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(14),
-                      gradient: LinearGradient(
-                        colors: [colors.videoStart, colors.videoEnd],
-                      ),
-                    ),
-                    child: const Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.auto_awesome_rounded,
-                          color: Colors.white,
-                          size: 17,
-                        ),
-                        SizedBox(width: 8),
-                        Text(
-                          'New here? Open guided Setup Wizard',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
+                      color: colors.shadowDark,
+                      borderRadius: BorderRadius.circular(4),
                     ),
                   ),
                 ),
-                const SizedBox(height: 16),
                 Text(
-                  'One-time setup in Termux: install it from F-Droid, then '
-                  'run this once inside Termux:',
-                  style: TextStyle(color: colors.textFaint, fontSize: 11.5),
+                  'Backend server',
+                  style: TextStyle(
+                    color: colors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 6),
-                SelectableText(
-                  'echo "allow-external-apps=true" >> ~/.termux/termux.properties '
-                  '&& termux-reload-settings',
-                  style: TextStyle(
-                    color: colors.textSecondary,
-                    fontSize: 11,
-                    fontFamily: 'monospace',
-                  ),
+                Text(
+                  'Don\'t know the IP? Tap Auto-detect below -- it scans your '
+                  'WiFi network and fills it in for you.',
+                  style: TextStyle(color: colors.textFaint, fontSize: 12.5),
                 ),
-                const SizedBox(height: 12),
-                NeomorphicContainer(
-                  style: NeoStyle.pressed,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 14,
-                    vertical: 4,
-                  ),
-                  borderRadius: BorderRadius.circular(14),
-                  child: TextField(
-                    controller: _termuxController,
-                    style: TextStyle(color: colors.textPrimary, fontSize: 12.5),
-                    maxLines: 3,
-                    minLines: 1,
-                    decoration: InputDecoration(
-                      isDense: true,
-                      border: InputBorder.none,
-                      hintText: 'Command Termux should run',
-                      hintStyle: TextStyle(
-                        color: colors.textFaint,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 10),
+                const SizedBox(height: 16),
                 TapScale(
-                  onTap: _termuxState == _TermuxState.sending
-                      ? null
-                      : _runViaTermux,
+                  onTap: _busy ? null : _autoDetect,
                   child: Container(
                     width: double.infinity,
                     padding: const EdgeInsets.symmetric(vertical: 14),
@@ -415,7 +172,7 @@ class _BackendSettingsSheetState extends State<_BackendSettingsSheet> {
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(color: colors.accent, width: 1.4),
                     ),
-                    child: _termuxState == _TermuxState.sending
+                    child: _scanState == _ScanState.scanning
                         ? Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
@@ -426,7 +183,9 @@ class _BackendSettingsSheetState extends State<_BackendSettingsSheet> {
                               ),
                               const SizedBox(width: 10),
                               Text(
-                                'Starting...',
+                                _scanTotal > 0
+                                    ? 'Scanning network... $_scanChecked/$_scanTotal'
+                                    : 'Scanning network...',
                                 style: TextStyle(
                                   color: colors.accent,
                                   fontWeight: FontWeight.w700,
@@ -439,128 +198,218 @@ class _BackendSettingsSheetState extends State<_BackendSettingsSheet> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Icon(
-                                Icons.terminal_rounded,
+                                Icons.wifi_find_rounded,
                                 color: colors.accent,
                                 size: 18,
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                'Start Backend via Termux',
+                                'Auto-detect',
                                 style: TextStyle(
                                   color: colors.accent,
                                   fontWeight: FontWeight.w700,
-                                  fontSize: 13.5,
+                                  fontSize: 14,
                                 ),
                               ),
                             ],
                           ),
                   ),
                 ),
-                if (_termuxState == _TermuxState.sent) ...[
+                if (_scanState == _ScanState.notFound) ...[
                   const SizedBox(height: 8),
+                  Text(
+                    'No backend found on this WiFi network. Make sure it\'s '
+                    'running and your phone is on the same network, then try '
+                    'again -- or enter the IP manually below.',
+                    style: TextStyle(
+                      color: const Color(0xFFE85D75),
+                      fontSize: 11.5,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Container(
+                        height: 1,
+                        color: colors.shadowDark.withValues(alpha: 0.3),
+                      ),
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text(
+                        'or enter manually',
+                        style: TextStyle(color: colors.textFaint, fontSize: 11),
+                      ),
+                    ),
+                    Expanded(
+                      child: Container(
+                        height: 1,
+                        color: colors.shadowDark.withValues(alpha: 0.3),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                NeomorphicContainer(
+                  style: NeoStyle.pressed,
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 14,
+                    vertical: 4,
+                  ),
+                  borderRadius: BorderRadius.circular(14),
+                  child: TextField(
+                    controller: _controller,
+                    style: TextStyle(color: colors.textPrimary, fontSize: 14),
+                    keyboardType: TextInputType.url,
+                    textInputAction: TextInputAction.done,
+                    decoration: InputDecoration(
+                      isDense: true,
+                      border: InputBorder.none,
+                      hintText: '192.168.0.42:8000',
+                      hintStyle: TextStyle(
+                        color: colors.textFaint,
+                        fontSize: 13,
+                      ),
+                    ),
+                    onSubmitted: (_) => _save(),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                _StatusLine(state: _state, colors: colors),
+                if (Platform.isAndroid) ...[
+                  const SizedBox(height: 20),
                   Row(
                     children: [
-                      const Icon(
-                        Icons.check_circle_rounded,
-                        color: Color(0xFF4ADE80),
-                        size: 16,
-                      ),
-                      const SizedBox(width: 6),
                       Expanded(
+                        child: Container(
+                          height: 1,
+                          color: colors.shadowDark.withValues(alpha: 0.3),
+                        ),
+                      ),
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 10),
                         child: Text(
-                          'Sent to Termux. Give it a few seconds, then use '
-                          'Auto-detect or Save & Test above to confirm.',
+                          'run backend on this phone',
                           style: TextStyle(
-                            color: const Color(0xFF4ADE80),
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w600,
+                            color: colors.textFaint,
+                            fontSize: 11,
                           ),
+                        ),
+                      ),
+                      Expanded(
+                        child: Container(
+                          height: 1,
+                          color: colors.shadowDark.withValues(alpha: 0.3),
                         ),
                       ),
                     ],
                   ),
-                ],
-                if (_termuxState == _TermuxState.notInstalled) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Termux isn\'t installed on this phone. Install it from '
-                    'F-Droid first.',
-                    style: TextStyle(
-                      color: const Color(0xFFE85D75),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-                if (_termuxState == _TermuxState.error) ...[
-                  const SizedBox(height: 8),
-                  Text(
-                    'Could not reach Termux. Make sure "allow-external-apps" '
-                    'is enabled (see command above).',
-                    style: TextStyle(
-                      color: const Color(0xFFE85D75),
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
-              ],
-              const SizedBox(height: 18),
-              Row(
-                children: [
-                  Expanded(
-                    child: TapScale(
-                      onTap: _busy ? null : _reset,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(color: colors.shadowDark),
+                  const SizedBox(height: 12),
+                  TapScale(
+                    onTap: () {
+                      Navigator.of(context).push(
+                        MaterialPageRoute(
+                          builder: (_) => const TermuxSetupScreen(),
                         ),
-                        child: Text(
-                          'Reset',
-                          style: TextStyle(
-                            color: colors.textSecondary,
-                            fontWeight: FontWeight.w700,
+                      );
+                    },
+                    child: Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 13),
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(14),
+                        gradient: LinearGradient(
+                          colors: [colors.videoStart, colors.videoEnd],
+                        ),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.auto_awesome_rounded,
+                            color: Colors.white,
+                            size: 17,
+                          ),
+                          SizedBox(width: 8),
+                          Text(
+                            'Open guided Setup Wizard',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Walks through installing Termux, permissions, and '
+                    'downloading + starting the backend -- step by step.',
+                    style: TextStyle(color: colors.textFaint, fontSize: 11.5),
+                  ),
+                ],
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    Expanded(
+                      child: TapScale(
+                        onTap: _busy ? null : _reset,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: colors.shadowDark),
+                          ),
+                          child: Text(
+                            'Reset',
+                            style: TextStyle(
+                              color: colors.textSecondary,
+                              fontWeight: FontWeight.w700,
+                            ),
                           ),
                         ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    flex: 2,
-                    child: TapScale(
-                      onTap: _busy ? null : _save,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                        alignment: Alignment.center,
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          gradient: LinearGradient(
-                            colors: [colors.videoStart, colors.videoEnd],
+                    const SizedBox(width: 12),
+                    Expanded(
+                      flex: 2,
+                      child: TapScale(
+                        onTap: _busy ? null : _save,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(16),
+                            gradient: LinearGradient(
+                              colors: [colors.videoStart, colors.videoEnd],
+                            ),
                           ),
-                        ),
-                        child: _state == _TestState.checking
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: OrbitLoader(size: 18),
-                              )
-                            : const Text(
-                                'Save & Test',
-                                style: TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.w700,
+                          child: _state == _TestState.checking
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: OrbitLoader(size: 18),
+                                )
+                              : const Text(
+                                  'Save & Test',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
+                        ),
                       ),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+              ],
+            ),
           ),
         ),
       ),

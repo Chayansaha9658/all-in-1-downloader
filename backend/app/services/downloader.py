@@ -77,7 +77,7 @@ def run_generic(url: str, download: bool, extra_opts: Optional[dict] = None):
     retrying every strategy for every URL:
       - "Unsupported URL" (no dedicated extractor)  -> force the generic HTML extractor
       - auth/login-required markers (403, empty media response, etc.) -> retry with cookies
-      - anything else (timeout, connection reset)    -> one plain retry
+      - anything else (timeout, connection reset)    -> retry with a longer timeout
     """
 
     def _try(opts: dict):
@@ -106,6 +106,16 @@ def run_generic(url: str, download: bool, extra_opts: Optional[dict] = None):
         if extra_opts:
             with_cookies.update(extra_opts)
         return _try(with_cookies)
+
+    # Likely a transient network issue (timeout, connection reset). Retrying
+    # with the exact same short timeout rarely helps a genuinely slow or
+    # rate-limiting site -- give it more room and more attempts instead.
+    patient = base_opts()
+    patient["socket_timeout"] = 45
+    patient["retries"] = 6
+    if extra_opts:
+        patient.update(extra_opts)
+    return _try(patient)
 
     # Likely a transient network issue (timeout, connection reset) -- one retry.
     return _try(opts)

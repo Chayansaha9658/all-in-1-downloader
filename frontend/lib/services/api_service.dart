@@ -27,6 +27,7 @@ class ApiService {
     String? formatId,
     bool audioOnly = false,
     String audioFormat = 'mp3',
+    String? title,
   }) async {
     final response = await http.post(
       Uri.parse('$_base/api/download/start'),
@@ -36,6 +37,7 @@ class ApiService {
         'format_id': ?formatId,
         'audio_only': audioOnly,
         'audio_format': audioFormat,
+        'title': ?title,
       }),
     );
     if (response.statusCode != 200) {

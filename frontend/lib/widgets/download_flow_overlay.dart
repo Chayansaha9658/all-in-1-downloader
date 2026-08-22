@@ -11,6 +11,7 @@ import '../services/file_saver_service.dart';
 import '../services/folder_service.dart';
 import '../services/theme_controller.dart';
 import 'neomorphic_container.dart';
+import 'orbit_loader.dart';
 import 'progress_ring.dart';
 import 'tap_scale.dart';
 
@@ -22,6 +23,7 @@ Future<bool?> showDownloadFlowOverlay(
   String? formatId,
   bool audioOnly = false,
   String audioFormat = 'mp3',
+  String? title,
 }) {
   return showGeneralDialog<bool>(
     context: context,
@@ -33,6 +35,7 @@ Future<bool?> showDownloadFlowOverlay(
       formatId: formatId,
       audioOnly: audioOnly,
       audioFormat: audioFormat,
+      knownTitle: title,
     ),
     transitionBuilder: (context, animation, _, child) {
       return FadeTransition(
@@ -53,6 +56,7 @@ class DownloadFlowOverlay extends StatefulWidget {
   final String? formatId;
   final bool audioOnly;
   final String audioFormat;
+  final String? knownTitle;
 
   const DownloadFlowOverlay({
     super.key,
@@ -60,6 +64,7 @@ class DownloadFlowOverlay extends StatefulWidget {
     this.formatId,
     this.audioOnly = false,
     this.audioFormat = 'mp3',
+    this.knownTitle,
   });
 
   @override
@@ -114,6 +119,7 @@ class _DownloadFlowOverlayState extends State<DownloadFlowOverlay>
         formatId: widget.formatId,
         audioOnly: widget.audioOnly,
         audioFormat: widget.audioFormat,
+        title: widget.knownTitle,
       );
       if (!mounted) return;
       _jobId = jobId;
@@ -343,13 +349,21 @@ class _ProgressView extends StatelessWidget {
         ((totalBytes != null && totalBytes! > 0)
             ? downloadedBytes / totalBytes!
             : null);
+    final isPreparing = fraction == null;
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        ProgressRing(progress: fraction),
+        if (isPreparing)
+          const SizedBox(
+            width: 110,
+            height: 110,
+            child: Center(child: OrbitLoader(size: 56)),
+          )
+        else
+          ProgressRing(progress: fraction),
         const SizedBox(height: 16),
         Text(
-          title,
+          isPreparing ? 'Preparing...' : title,
           style: TextStyle(
             color: colors.textPrimary,
             fontSize: 15,
@@ -357,10 +371,11 @@ class _ProgressView extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 14),
-        Text(
-          '${formatBytes(downloadedBytes)} / ${totalBytes != null ? formatBytes(totalBytes) : '--'}',
-          style: TextStyle(color: colors.textSecondary, fontSize: 13),
-        ),
+        if (!isPreparing)
+          Text(
+            '${formatBytes(downloadedBytes)} / ${totalBytes != null ? formatBytes(totalBytes) : '--'}',
+            style: TextStyle(color: colors.textSecondary, fontSize: 13),
+          ),
         if (speed != null || eta != null) ...[
           const SizedBox(height: 6),
           Row(

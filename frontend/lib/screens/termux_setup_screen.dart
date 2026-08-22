@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 import '../services/backend_config_service.dart';
 import '../services/browser_session_manager.dart';
@@ -17,8 +18,6 @@ class TermuxSetupScreen extends StatefulWidget {
   State<TermuxSetupScreen> createState() => _TermuxSetupScreenState();
 }
 
-enum _Busy { none, permission, setup, start }
-
 class _TermuxSetupScreenState extends State<TermuxSetupScreen>
     with WidgetsBindingObserver {
   final _bridge = TermuxBridgeService.instance;
@@ -26,7 +25,8 @@ class _TermuxSetupScreenState extends State<TermuxSetupScreen>
 
   bool _termuxInstalled = false;
   bool _hasPermission = false;
-  _Busy _busy = _Busy.none;
+  bool _verifyingBackend = false;
+  bool _backendVerified = false;
   String? _setupStatus;
   String? _startStatus;
 
@@ -34,8 +34,11 @@ class _TermuxSetupScreenState extends State<TermuxSetupScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    final savedRepo = BackendConfigService.instance.termuxRepoUrl;
     _repoController = TextEditingController(
-      text: BackendConfigService.instance.termuxRepoUrl,
+      text: savedRepo.isNotEmpty
+          ? savedRepo
+          : TermuxBridgeService.defaultRepoUrl,
     );
     _refreshStatus();
   }
@@ -73,91 +76,102 @@ class _TermuxSetupScreenState extends State<TermuxSetupScreen>
   }
 
   Future<void> _grantPermission() async {
-    setState(() => _busy = _Busy.permission);
+    setState(() => _hasPermission = false);
     final granted = await _bridge.requestRunCommandPermission();
     if (!mounted) return;
-    setState(() {
-      _hasPermission = granted;
-      _busy = _Busy.none;
-    });
+    setState(() => _hasPermission = granted);
   }
 
-  Future<void> _copyAndOpenTermux() async {
-    await Clipboard.setData(
-      const ClipboardData(text: TermuxBridgeService.allowExternalAppsCommand),
-    );
+  Future<void> _copyOpenPaste({
+    required String command,
+    required String message,
+    VoidCallback? onOpened,
+  }) async {
+    await Clipboard.setData(ClipboardData(text: command));
     if (!mounted) return;
     showDialog<void>(
       context: context,
       builder: (context) => _OpenTermuxDialog(
+        message: message,
         onOpen: () {
           Navigator.of(context).pop();
           _bridge.openTermux();
+          onOpened?.call();
         },
       ),
     );
   }
 
-  Future<void> _runSetup() async {
+  Future<void> _copyAllowExternalApps() {
+    return _copyOpenPaste(
+      command: TermuxBridgeService.allowExternalAppsCommand,
+      message:
+          'Now open Termux, paste it (long-press → Paste), and press '
+          'Enter. Then close and reopen Termux once.',
+    );
+  }
+
+  Future<void> _copySetupCommand() async {
     final repo = _repoController.text.trim();
     if (repo.isEmpty) {
       setState(() => _setupStatus = 'Paste your GitHub repo link first.');
       return;
     }
     await BackendConfigService.instance.setTermuxRepoUrl(repo);
-    setState(() {
-      _busy = _Busy.setup;
-      _setupStatus = null;
-    });
-    final installed = await _bridge.isTermuxInstalled();
-    if (!installed) {
-      if (!mounted) return;
-      setState(() {
-        _busy = _Busy.none;
-        _setupStatus = 'Termux isn\'t installed yet -- see step 1 above.';
-      });
-      return;
-    }
-    final sent = await _bridge.runCommand(
-      TermuxBridgeService.buildSetupCommand(repo),
+    setState(() => _setupStatus = null);
+    await _copyOpenPaste(
+      command: TermuxBridgeService.buildSetupCommand(repo),
+      message:
+          'Now open Termux, paste it (long-press → Paste), and press '
+          'Enter. First run installs Python/ffmpeg and clones the repo -- '
+          'this can take several minutes. Come back here when it finishes.',
     );
-    if (!mounted) return;
-    setState(() {
-      _busy = _Busy.none;
-      _setupStatus = sent
-          ? 'Sent to Termux. First run installs Python/ffmpeg and clones '
-                'the repo -- this can take several minutes. Open Termux to '
-                'watch progress.'
-          : 'Could not reach Termux. Make sure step 2 (the one-time paste) '
-                'is done.';
-    });
   }
 
-  Future<void> _startBackend() async {
+  Future<void> _copyStartCommand() async {
+    // The backend runs on this same phone, so point the app at localhost
+    // right away instead of making the person type/scan for it.
+    await BackendConfigService.instance.setBaseUrl('127.0.0.1:8000');
     setState(() {
-      _busy = _Busy.start;
       _startStatus = null;
+      _backendVerified = false;
     });
-    final installed = await _bridge.isTermuxInstalled();
-    if (!installed) {
-      if (!mounted) return;
-      setState(() {
-        _busy = _Busy.none;
-        _startStatus = 'Termux isn\'t installed yet -- see step 1 above.';
-      });
-      return;
-    }
-    final sent = await _bridge.runCommand(
-      BackendConfigService.instance.termuxCommand,
+    await _copyOpenPaste(
+      command: BackendConfigService.instance.termuxCommand,
+      message:
+          'Now open Termux, paste it (long-press → Paste), and press '
+          'Enter to start the server.',
+      onOpened: _verifyBackend,
     );
+  }
+
+  Future<void> _verifyBackend() async {
+    setState(() => _verifyingBackend = true);
+    for (var i = 0; i < 15; i++) {
+      await Future.delayed(const Duration(seconds: 2));
+      if (!mounted) return;
+      try {
+        final response = await http
+            .get(Uri.parse('http://127.0.0.1:8000/docs'))
+            .timeout(const Duration(seconds: 2));
+        if (response.statusCode < 500) {
+          setState(() {
+            _verifyingBackend = false;
+            _backendVerified = true;
+            _startStatus = 'Backend is running.';
+          });
+          return;
+        }
+      } catch (_) {
+        // Not up yet -- keep polling.
+      }
+    }
     if (!mounted) return;
     setState(() {
-      _busy = _Busy.none;
-      _startStatus = sent
-          ? 'Sent to Termux. Give it a few seconds, then go to Settings and '
-                'use Auto-detect to confirm it\'s reachable.'
-          : 'Could not reach Termux. Make sure step 2 (the one-time paste) '
-                'is done.';
+      _verifyingBackend = false;
+      _startStatus =
+          'Still not reachable. Open Termux and check for errors -- if '
+          'step 4 is still installing, wait for it to finish and try again.';
     });
   }
 
@@ -240,7 +254,6 @@ class _TermuxSetupScreenState extends State<TermuxSetupScreen>
                               _WizardButton(
                                 label: 'Grant permission',
                                 icon: Icons.verified_user_rounded,
-                                busy: _busy == _Busy.permission,
                                 onTap: _grantPermission,
                                 colors: colors,
                               ),
@@ -260,28 +273,23 @@ class _TermuxSetupScreenState extends State<TermuxSetupScreen>
                               'This one line lives inside Termux\'s own '
                               'private settings, so only you (inside '
                               'Termux) can set it -- no app can do this '
-                              'for you. Tap below to copy it, then paste '
-                              '(long-press → Paste) and press Enter in '
-                              'Termux, then close and reopen Termux once.',
+                              'for you.',
                               style: TextStyle(
                                 color: colors.textFaint,
                                 fontSize: 12.5,
                               ),
                             ),
                             const SizedBox(height: 10),
-                            SelectableText(
-                              TermuxBridgeService.allowExternalAppsCommand,
-                              style: TextStyle(
-                                color: colors.textSecondary,
-                                fontSize: 11,
-                                fontFamily: 'monospace',
-                              ),
+                            _CopyableCommand(
+                              command:
+                                  TermuxBridgeService.allowExternalAppsCommand,
+                              colors: colors,
                             ),
                             const SizedBox(height: 10),
                             _WizardButton(
-                              label: 'Copy command',
+                              label: 'Copy & Open Termux',
                               icon: Icons.copy_rounded,
-                              onTap: _copyAndOpenTermux,
+                              onTap: _copyAllowExternalApps,
                               colors: colors,
                             ),
                           ],
@@ -297,44 +305,55 @@ class _TermuxSetupScreenState extends State<TermuxSetupScreen>
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Paste your GitHub repo link:',
+                              'Your backend\'s GitHub link (already filled '
+                              'in -- edit only if it changes):',
                               style: TextStyle(
                                 color: colors.textFaint,
                                 fontSize: 12.5,
                               ),
                             ),
                             const SizedBox(height: 8),
-                            NeomorphicContainer(
-                              style: NeoStyle.pressed,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 14,
-                                vertical: 4,
-                              ),
-                              borderRadius: BorderRadius.circular(14),
-                              child: TextField(
-                                controller: _repoController,
-                                style: TextStyle(
-                                  color: colors.textPrimary,
-                                  fontSize: 13,
-                                ),
-                                decoration: InputDecoration(
-                                  isDense: true,
-                                  border: InputBorder.none,
-                                  hintText:
-                                      'https://github.com/you/all-in-1-downloader.git',
-                                  hintStyle: TextStyle(
-                                    color: colors.textFaint,
-                                    fontSize: 12,
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: NeomorphicContainer(
+                                    style: NeoStyle.pressed,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 14,
+                                      vertical: 4,
+                                    ),
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: TextField(
+                                      controller: _repoController,
+                                      style: TextStyle(
+                                        color: colors.textPrimary,
+                                        fontSize: 12.5,
+                                      ),
+                                      decoration: InputDecoration(
+                                        isDense: true,
+                                        border: InputBorder.none,
+                                        hintText:
+                                            'https://github.com/you/repo.git',
+                                        hintStyle: TextStyle(
+                                          color: colors.textFaint,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ),
                                   ),
                                 ),
-                              ),
+                                const SizedBox(width: 8),
+                                _CopyIconButton(
+                                  getText: () => _repoController.text.trim(),
+                                  colors: colors,
+                                ),
+                              ],
                             ),
                             const SizedBox(height: 10),
                             _WizardButton(
-                              label: 'Download & Setup Backend',
+                              label: 'Copy & Open Termux',
                               icon: Icons.cloud_download_rounded,
-                              busy: _busy == _Busy.setup,
-                              onTap: _runSetup,
+                              onTap: _copySetupCommand,
                               colors: colors,
                             ),
                             if (_setupStatus != null) ...[
@@ -354,19 +373,64 @@ class _TermuxSetupScreenState extends State<TermuxSetupScreen>
                       _StepCard(
                         number: 5,
                         title: 'Start the backend',
-                        done: false,
+                        done: _backendVerified,
                         colors: colors,
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            _WizardButton(
-                              label: 'Start Backend via Termux',
-                              icon: Icons.terminal_rounded,
-                              busy: _busy == _Busy.start,
-                              onTap: _startBackend,
+                            _CopyableCommand(
+                              command:
+                                  BackendConfigService.instance.termuxCommand,
                               colors: colors,
                             ),
-                            if (_startStatus != null) ...[
+                            const SizedBox(height: 10),
+                            _WizardButton(
+                              label: 'Copy & Open Termux',
+                              icon: Icons.terminal_rounded,
+                              onTap: _copyStartCommand,
+                              colors: colors,
+                            ),
+                            if (_verifyingBackend) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  const SizedBox(
+                                    width: 14,
+                                    height: 14,
+                                    child: OrbitLoader(size: 14),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Checking if it\'s reachable...',
+                                    style: TextStyle(
+                                      color: colors.textFaint,
+                                      fontSize: 11.5,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                            if (_backendVerified) ...[
+                              const SizedBox(height: 10),
+                              Row(
+                                children: [
+                                  const Icon(
+                                    Icons.check_circle_rounded,
+                                    color: Color(0xFF4ADE80),
+                                    size: 16,
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    'Backend is running!',
+                                    style: TextStyle(
+                                      color: const Color(0xFF4ADE80),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ] else if (_startStatus != null) ...[
                               const SizedBox(height: 8),
                               Text(
                                 _startStatus!,
@@ -462,11 +526,60 @@ class _StepCard extends StatelessWidget {
   }
 }
 
+class _CopyableCommand extends StatelessWidget {
+  final String command;
+  final colors;
+
+  const _CopyableCommand({required this.command, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Expanded(
+          child: SelectableText(
+            command,
+            style: TextStyle(
+              color: colors.textSecondary,
+              fontSize: 11,
+              fontFamily: 'monospace',
+            ),
+          ),
+        ),
+        const SizedBox(width: 6),
+        _CopyIconButton(getText: () => command, colors: colors),
+      ],
+    );
+  }
+}
+
+class _CopyIconButton extends StatelessWidget {
+  final String Function() getText;
+  final colors;
+
+  const _CopyIconButton({required this.getText, required this.colors});
+
+  @override
+  Widget build(BuildContext context) {
+    return TapScale(
+      onTap: () => Clipboard.setData(ClipboardData(text: getText())),
+      child: Container(
+        padding: const EdgeInsets.all(8),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: colors.shadowDark),
+        ),
+        child: Icon(Icons.copy_rounded, size: 15, color: colors.textFaint),
+      ),
+    );
+  }
+}
+
 class _WizardButton extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  final bool busy;
   final colors;
 
   const _WizardButton({
@@ -474,13 +587,12 @@ class _WizardButton extends StatelessWidget {
     required this.icon,
     required this.onTap,
     required this.colors,
-    this.busy = false,
   });
 
   @override
   Widget build(BuildContext context) {
     return TapScale(
-      onTap: busy ? null : onTap,
+      onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: const EdgeInsets.symmetric(vertical: 13),
@@ -489,32 +601,31 @@ class _WizardButton extends StatelessWidget {
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: colors.accent, width: 1.3),
         ),
-        child: busy
-            ? SizedBox(width: 16, height: 16, child: OrbitLoader(size: 16))
-            : Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(icon, color: colors.accent, size: 17),
-                  const SizedBox(width: 8),
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: colors.accent,
-                      fontWeight: FontWeight.w700,
-                      fontSize: 13,
-                    ),
-                  ),
-                ],
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, color: colors.accent, size: 17),
+            const SizedBox(width: 8),
+            Text(
+              label,
+              style: TextStyle(
+                color: colors.accent,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
               ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
 class _OpenTermuxDialog extends StatelessWidget {
+  final String message;
   final VoidCallback onOpen;
 
-  const _OpenTermuxDialog({required this.onOpen});
+  const _OpenTermuxDialog({required this.message, required this.onOpen});
 
   @override
   Widget build(BuildContext context) {
@@ -530,8 +641,7 @@ class _OpenTermuxDialog extends StatelessWidget {
         ),
       ),
       content: Text(
-        'Now open Termux, paste it (long-press → Paste), and press Enter. '
-        'Then close and reopen Termux once.',
+        message,
         style: TextStyle(color: colors.textFaint, fontSize: 13),
       ),
       actions: [

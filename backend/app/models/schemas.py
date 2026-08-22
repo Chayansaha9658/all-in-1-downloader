@@ -32,6 +32,7 @@ class DownloadRequest(BaseModel):
     format_id: Optional[str] = None
     audio_only: bool = False
     audio_format: Literal["mp3", "m4a"] = "mp3"
+    title: Optional[str] = None
 
 
 class StartDownloadResponse(BaseModel):

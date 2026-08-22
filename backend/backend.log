@@ -1,20 +1,5 @@
-INFO:     Started server process [76274]
+INFO:     Started server process [94503]
 INFO:     Waiting for application startup.
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     192.168.1.6:43022 - "POST /api/download/start HTTP/1.1" 200 OK
-INFO:     192.168.1.6:43030 - "GET /api/download/bbb6fbbe5cc04b5e916a0cf19025d2d3/events HTTP/1.1" 200 OK
-ERROR: [XVideos] kcmobbh953c: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-ERROR: [XVideos] kcmobbh953c: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-ERROR: [XVideos] kcmobbh953c: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-INFO:     192.168.1.6:54854 - "POST /api/info HTTP/1.1" 200 OK
-INFO:     192.168.1.6:34820 - "POST /api/download/start HTTP/1.1" 200 OK
-INFO:     192.168.1.6:34830 - "GET /api/download/90fc79065a664389810b4a7cdd093e8d/events HTTP/1.1" 200 OK
-ERROR: [XVideos] kcmobbh953c: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-ERROR: [XVideos] kcmobbh953c: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-ERROR: [generic] 355882: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-INFO:     192.168.1.6:38894 - "POST /api/info HTTP/1.1" 200 OK
-INFO:     192.168.1.6:38896 - "POST /api/download/start HTTP/1.1" 200 OK
-INFO:     192.168.1.6:38902 - "GET /api/download/2a7a6fc1d14f48e3b208636f212bb208/events HTTP/1.1" 200 OK
-ERROR: [generic] 355882: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-ERROR: [generic] 355882: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
+INFO:     192.168.1.6:45854 - "GET /docs HTTP/1.1" 200 OK

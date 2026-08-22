@@ -25,7 +25,7 @@ def get_info(payload: InfoRequest):
 async def start_download(payload: DownloadRequest):
     loop = asyncio.get_running_loop()
     job_id = start_download_job(
-        str(payload.url), payload.format_id, payload.audio_only, payload.audio_format, loop
+        str(payload.url), payload.format_id, payload.audio_only, payload.audio_format, loop, payload.title
     )
     return StartDownloadResponse(job_id=job_id)
 

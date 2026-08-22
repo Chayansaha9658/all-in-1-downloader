@@ -46,6 +46,7 @@ def start_download_job(
     audio_only: bool,
     audio_format: str,
     loop: asyncio.AbstractEventLoop,
+    title: Optional[str] = None,
 ) -> str:
     job_id = uuid.uuid4().hex
     job = DownloadJob(job_id=job_id, queue=asyncio.Queue(), loop=loop)
@@ -53,7 +54,7 @@ def start_download_job(
 
     thread = threading.Thread(
         target=_run_download,
-        args=(job, url, format_id, audio_only, audio_format),
+        args=(job, url, format_id, audio_only, audio_format, title),
         daemon=True,
     )
     thread.start()
@@ -216,8 +217,9 @@ def _run_download(
     format_id: Optional[str],
     audio_only: bool,
     audio_format: str,
+    known_title: Optional[str] = None,
 ) -> None:
-    title = _resolve_title(job, url)
+    title = known_title or _resolve_title(job, url)
     if title is None:
         return
 
