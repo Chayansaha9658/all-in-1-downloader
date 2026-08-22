@@ -35,8 +35,9 @@ class TermuxBridgeService {
   /// backend from [repoUrl], and sets up its Python environment. Does not
   /// start the server -- use [defaultCommand] for that afterwards.
   static String buildSetupCommand(String repoUrl) {
-    return 'pkg update -y && pkg upgrade -y && '
-        'pkg install -y python git ffmpeg && '
+    return 'cd ~ && '
+        'pkg update -y && pkg upgrade -y && '
+        'pkg install -y python git ffmpeg rust binutils && '
         'rm -rf ~/all-in-1-downloader && '
         'git clone $repoUrl ~/all-in-1-downloader && '
         'cd ~/all-in-1-downloader/backend && '
