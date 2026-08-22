@@ -1,6 +1,8 @@
 import re
+import urllib.request
 from pathlib import Path
 from typing import Optional
+from urllib.parse import urljoin
 
 import yt_dlp
 
@@ -54,6 +56,13 @@ def base_opts() -> dict:
         "http_headers": {"User-Agent": USER_AGENT},
         "force_ipv4": True,
         "retries": 3,
+        # Some sites (or a network hop in between) reset the connection on
+        # long single-stream transfers -- small audio files finish before
+        # that happens, but large video files don't. Downloading in chunks
+        # via Range requests means a mid-transfer reset only has to retry
+        # the current chunk, not restart the whole file.
+        "http_chunk_size": 10 * 1024 * 1024,
+        "fragment_retries": 10,
     }
 
 
@@ -127,9 +136,109 @@ def sanitize_filename(title: str, max_length: int = 80) -> str:
     return cleaned[:max_length] if cleaned else "download"
 
 
+def _fetch_page_html(url: str, timeout: int = 15) -> str:
+    """Plain HTTP GET of the page source, reused by every scraping-based
+    fallback below so the page is only downloaded once per attempt."""
+    request = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        raw = response.read()
+    charset = response.headers.get_content_charset() or "utf-8"
+    return raw.decode(charset, errors="ignore")
+
+
+def _scrape_og_video_url(html: str) -> Optional[str]:
+    """Looks for the og:video / twitter:player meta tag many sites set for
+    link-preview cards -- when present it's a direct link straight to the
+    video file, no JS rendering needed."""
+    for prop in ("og:video:url", "og:video", "twitter:player:stream"):
+        pattern = (
+            rf'<meta[^>]+(?:property|name)=["\']?{re.escape(prop)}["\']?[^>]+content=["\']([^"\']+)'
+        )
+        match = re.search(pattern, html, re.IGNORECASE)
+        if match:
+            return match.group(1)
+    return None
+
+
+def _scrape_media_url(html: str) -> Optional[str]:
+    """Looks for a raw .m3u8 (HLS) or .mp4 link sitting in the page source
+    or an inline <script> block -- common with simple/older video players
+    that don't bother obfuscating the source."""
+    m = re.search(r'https?://[^\s"\'<>\\]+\.m3u8[^\s"\'<>\\]*', html)
+    if m:
+        return m.group(0)
+    m = re.search(r'https?://[^\s"\'<>\\]+\.mp4[^\s"\'<>\\]*', html)
+    return m.group(0) if m else None
+
+
+def _scrape_iframe_src(html: str) -> Optional[str]:
+    """Some sites don't host the player themselves -- they embed a third
+    party player (streamtape/dood/mixdrop-style) via <iframe>. Returns that
+    iframe's src so the caller can resolve it as its own page."""
+    match = re.search(r'<iframe[^>]+src=["\']([^"\']+)', html, re.IGNORECASE)
+    return match.group(1) if match else None
+
+
+def extract_via_fallback_chain(url: str, download: bool, extra_opts: Optional[dict] = None):
+    """Tries independent extraction strategies in order, stopping at the
+    first that works. Each strategy gets exactly one attempt here -- the
+    short internal retry ladder inside run_generic (unsupported URL / auth /
+    patient timeout) still applies within a strategy, but the chain itself
+    never re-tries a strategy that already failed, so a genuinely unsupported
+    URL fails in a handful of attempts instead of stalling through every
+    strategy multiple times.
+    """
+    errors: list[str] = []
+
+    # 1) yt-dlp's own extractor (dedicated site extractor, or generic HTML
+    # extractor as yt-dlp's own fallback -- see run_generic).
+    try:
+        return run_generic(url, download, extra_opts)
+    except Exception as exc:
+        errors.append(f"yt-dlp: {exc}")
+
+    try:
+        html = _fetch_page_html(url)
+    except Exception as exc:
+        errors.append(f"page fetch: {exc}")
+        return _raise_chain_failure(errors)
+
+    # 2) Open Graph / Twitter Player meta tag -- direct file link, no JS
+    # rendering required.
+    og_url = _scrape_og_video_url(html)
+    if og_url:
+        try:
+            return run_generic(urljoin(url, og_url), download, extra_opts)
+        except Exception as exc:
+            errors.append(f"og:video: {exc}")
+
+    # 3) A raw .m3u8/.mp4 link sitting directly in the page source.
+    media_url = _scrape_media_url(html)
+    if media_url:
+        try:
+            return run_generic(media_url, download, extra_opts)
+        except Exception as exc:
+            errors.append(f"media scrape: {exc}")
+
+    # 4) The page embeds a third-party player via <iframe> -- resolve that
+    # page instead (one level deep only, to keep this bounded).
+    iframe_src = _scrape_iframe_src(html)
+    if iframe_src:
+        try:
+            return run_generic(urljoin(url, iframe_src), download, extra_opts)
+        except Exception as exc:
+            errors.append(f"iframe: {exc}")
+
+    return _raise_chain_failure(errors)
+
+
+def _raise_chain_failure(errors: list[str]):
+    raise Exception("Unsupported URL -- every fallback failed: " + " | ".join(errors))
+
+
 def extract_info_with_retry(url: str, download: bool, extra_opts: Optional[dict] = None):
     if not is_youtube_url(url):
-        return run_generic(url, download, extra_opts)
+        return extract_via_fallback_chain(url, download, extra_opts)
 
     last_exc: Optional[Exception] = None
     for client in INFO_PLAYER_CLIENTS:

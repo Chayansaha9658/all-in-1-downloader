@@ -30,6 +30,12 @@ class HomeScreenState extends State<HomeScreen> {
   VideoInfo? _info;
   String? _error;
 
+  // Bumped on every new fetch and on clear/cancel. A fetch only applies its
+  // result if this counter hasn't moved since it started -- this is what
+  // lets pressing X actually "cancel" an in-flight search instead of just
+  // hiding the old result until the request finishes on its own.
+  int _requestId = 0;
+
   @override
   void dispose() {
     _controller.dispose();
@@ -48,12 +54,22 @@ class HomeScreenState extends State<HomeScreen> {
     _fetchInfo();
   }
 
+  void _cancelActiveFetch() {
+    _requestId++;
+    setState(() {
+      _info = null;
+      _error = null;
+      _isFetching = false;
+    });
+  }
+
   Future<void> _fetchInfo() async {
     final url = _controller.text.trim();
     if (url.isEmpty) {
       setState(() => _error = 'Paste a link first');
       return;
     }
+    final requestId = ++_requestId;
     setState(() {
       _isFetching = true;
       _error = null;
@@ -61,13 +77,15 @@ class HomeScreenState extends State<HomeScreen> {
     });
     try {
       final info = await _api.fetchInfo(url);
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       setState(() => _info = info);
     } catch (e) {
-      if (!mounted) return;
+      if (!mounted || requestId != _requestId) return;
       setState(() => _error = e.toString().replaceFirst('Exception: ', ''));
     } finally {
-      if (mounted) setState(() => _isFetching = false);
+      if (mounted && requestId == _requestId) {
+        setState(() => _isFetching = false);
+      }
     }
   }
 
@@ -147,12 +165,7 @@ class HomeScreenState extends State<HomeScreen> {
                         controller: _controller,
                         isLoading: _isFetching,
                         onSearch: _fetchInfo,
-                        onClear: () {
-                          setState(() {
-                            _info = null;
-                            _error = null;
-                          });
-                        },
+                        onClear: _cancelActiveFetch,
                       ),
                       const SizedBox(height: 6),
                       _TopLoadingBar(active: _isFetching),

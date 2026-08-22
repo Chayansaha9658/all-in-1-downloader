@@ -13,14 +13,56 @@ const _mobileUserAgent =
 
 const _videoWatcherScript = '''
 (function () {
+  if (window.__aid1Installed) return;
+  window.__aid1Installed = true;
+
   function reportVideos() {
     var videos = document.querySelectorAll('video');
     window.VideoDetector.postMessage(videos.length > 0 ? 'found' : 'none');
   }
+
+  function reportMediaUrl(url) {
+    if (!url || typeof url !== 'string') return;
+    if (/\\.(mp4|m3u8|webm|mov)(\\?|\$)/i.test(url)) {
+      window.MediaUrlDetector.postMessage(url);
+    }
+  }
+
+  function scanMediaTags() {
+    document.querySelectorAll('video, source').forEach(function (el) {
+      reportMediaUrl(el.currentSrc || el.src);
+    });
+  }
+
+  // Covers players that set the source via JS (fetch/XHR) instead of a
+  // plain HTML src attribute -- catches the request on the way out.
+  var origFetch = window.fetch;
+  if (origFetch) {
+    window.fetch = function (input) {
+      try {
+        reportMediaUrl(typeof input === 'string' ? input : (input && input.url));
+      } catch (e) {}
+      return origFetch.apply(this, arguments);
+    };
+  }
+
+  var origOpen = XMLHttpRequest.prototype.open;
+  XMLHttpRequest.prototype.open = function (method, url) {
+    try { reportMediaUrl(url); } catch (e) {}
+    return origOpen.apply(this, arguments);
+  };
+
   reportVideos();
-  var observer = new MutationObserver(function () { reportVideos(); });
+  scanMediaTags();
+  var observer = new MutationObserver(function () {
+    reportVideos();
+    scanMediaTags();
+  });
   observer.observe(document.body, { childList: true, subtree: true });
-  setInterval(reportVideos, 2000);
+  setInterval(function () {
+    reportVideos();
+    scanMediaTags();
+  }, 2000);
 })();
 ''';
 
@@ -39,6 +81,11 @@ class BrowserTab {
   bool canGoBack = false;
   bool canGoForward = false;
   bool videoDetected = false;
+  // The direct .mp4/.m3u8 link sniffed off the page, if any -- preferred
+  // over currentUrl when starting a download since it's a raw media file
+  // link, which yt-dlp's generic extractor handles far more reliably than
+  // an arbitrary page URL.
+  String? detectedMediaUrl;
   bool isLoading = false;
 }
 
@@ -124,12 +171,20 @@ class BrowserSessionManager {
           if (tab.id == activeTabId) onActiveTabChanged?.call();
         },
       )
+      ..addJavaScriptChannel(
+        'MediaUrlDetector',
+        onMessageReceived: (message) {
+          tab.detectedMediaUrl = message.message;
+          if (tab.id == activeTabId) onActiveTabChanged?.call();
+        },
+      )
       ..setNavigationDelegate(
         NavigationDelegate(
           onPageStarted: (url) {
             tab.currentUrl = url;
             tab.isLoading = true;
             tab.videoDetected = false;
+            tab.detectedMediaUrl = null;
             if (tab.id == activeTabId) onActiveTabChanged?.call();
           },
           onPageFinished: (url) async {

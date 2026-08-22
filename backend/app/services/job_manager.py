@@ -13,8 +13,8 @@ from app.config import DOWNLOAD_DIR
 from app.services.downloader import (
     DOWNLOAD_PLAYER_CLIENTS,
     base_opts,
+    extract_via_fallback_chain,
     is_youtube_url,
-    run_generic,
     sanitize_filename,
 )
 
@@ -72,7 +72,7 @@ def cancel_download_job(job_id: str) -> bool:
 def _resolve_title(job: DownloadJob, url: str) -> Optional[str]:
     if not is_youtube_url(url):
         try:
-            raw = run_generic(url, download=False)
+            raw = extract_via_fallback_chain(url, download=False)
             return raw.get("title", "Untitled")
         except Exception as exc:
             _emit(job, {"status": "error", "error": _clean(str(exc))})
@@ -161,11 +161,12 @@ def _attempt_download_pass(job: DownloadJob, url: str, out_template: str, audio_
 
     if not is_youtube_url(url):
         # Non-YouTube sites don't need YouTube player_client rotation --
-        # run_generic picks the right retry strategy based on the failure.
+        # the fallback chain (dedicated extractor -> generic -> scraped
+        # og:video/media-url/iframe) already picks the right strategy.
         opts_extra: dict = {"outtmpl": out_template, "progress_hooks": [progress_hook]}
         opts_extra.update(_format_for(audio_only, format_id))
         try:
-            raw = run_generic(url, download=True, extra_opts=opts_extra)
+            raw = extract_via_fallback_chain(url, download=True, extra_opts=opts_extra)
             requested = raw.get("requested_downloads") or []
             if requested and requested[0].get("filepath"):
                 return Path(requested[0]["filepath"]), None

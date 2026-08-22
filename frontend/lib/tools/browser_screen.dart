@@ -106,7 +106,11 @@ class _BrowserScreenState extends State<BrowserScreen> {
   }
 
   Future<void> _downloadFromCurrentPage() async {
-    final url = _session.activeTab.currentUrl;
+    final tab = _session.activeTab;
+    // A sniffed direct media link is far more reliable than the page URL --
+    // it's a raw file link yt-dlp's generic extractor can grab straight
+    // away, instead of having to re-derive it from the page itself.
+    final url = tab.detectedMediaUrl ?? tab.currentUrl;
     showModalBottomSheet<void>(
       context: context,
       backgroundColor: Colors.transparent,
