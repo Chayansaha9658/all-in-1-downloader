@@ -1,21 +1,0 @@
-INFO:     Started server process [53503]
-INFO:     Waiting for application startup.
-INFO:     Application startup complete.
-INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
-INFO:     10.21.153.104:53329 - "GET /docs HTTP/1.1" 200 OK
-INFO:     10.21.153.104:53330 - "GET /docs HTTP/1.1" 200 OK
-INFO:     10.21.153.104:53332 - "GET /docs HTTP/1.1" 200 OK
-INFO:     10.21.153.104:53333 - "POST /api/info HTTP/1.1" 200 OK
-INFO:     10.21.153.104:53374 - "POST /api/info HTTP/1.1" 200 OK
-INFO:     10.21.153.104:53470 - "POST /api/download/start HTTP/1.1" 200 OK
-INFO:     10.21.153.104:53471 - "GET /api/download/6f560ade20b54d199828b351db0709d3/events HTTP/1.1" 200 OK
-ERROR: [XVideos] kcmobbh953c: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-ERROR: [XVideos] kcmobbh953c: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-INFO:     10.21.153.104:53617 - "POST /api/download/start HTTP/1.1" 200 OK
-INFO:     10.21.153.104:53618 - "GET /api/download/9d4a9275a09e40279689db0b96b38d18/events HTTP/1.1" 200 OK
-[download]   0.0% of ~  34.94MiB at    424.62B/s ETA Unknown (frag 0/30)[download]   0.0% of ~  34.97MiB at    424.62B/s ETA Unknown (frag 0/30)[download]   0.0% of ~  35.03MiB at    424.62B/s ETA Unknown (frag 0/30)[download]   0.0% of ~  35.15MiB at    424.62B/s ETA Unknown (frag 0/30)[download]   0.1% of ~  35.38MiB at    9.33KiB/s ETA 20:01 (frag 0/30)  [download]   0.2% of ~  35.85MiB at   21.32KiB/s ETA 19:15 (frag 0/30)[download]   0.3% of ~  36.79MiB at   38.80KiB/s ETA 18:07 (frag 0/30)[download]   0.6% of ~  38.66MiB at   61.80KiB/s ETA 16:52 (frag 0/30)[download]   1.1% of ~  42.41MiB at   96.51KiB/s ETA 15:35 (frag 0/30)[download]   1.8% of ~  48.54MiB at  156.25KiB/s ETA 14:18 (frag 0/30)INFO:     10.21.153.104:53632 - "POST /api/download/9d4a9275a09e40279689db0b96b38d18/cancel HTTP/1.1" 200 OK
-[download]   1.9% of ~  60.81MiB at  254.32KiB/s ETA 13:05 (frag 0/30)INFO:     10.21.153.104:53637 - "POST /api/download/start HTTP/1.1" 200 OK
-INFO:     10.21.153.104:53638 - "GET /api/download/1ab718734de74cfc85be9a7497b44b8e/events HTTP/1.1" 200 OK
-ERROR: [XVideos] kcmobbh953c: Unable to download webpage: [Errno 54] Connection reset by peer (caused by TransportError('[Errno 54] Connection reset by peer'))
-ERROR: unable to download video data: [Errno 8] nodename nor servname provided, or not known
-ERROR: [download] Got error: [Errno 8] nodename nor servname provided, or not known. Giving up after 6 retries
